@@ -1,11 +1,10 @@
 """Post related data models"""
 
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import BaseModel, Extra
-from sqlmodel import Field, SQLModel, Relationship
-
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from project_name.security import User
@@ -13,6 +12,7 @@ if TYPE_CHECKING:
 
 class Post(SQLModel, table=True):
     """Represents the Post Model"""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     text: str
     date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
@@ -28,6 +28,7 @@ class Post(SQLModel, table=True):
 
 class PostResponse(BaseModel):
     """Serializer for Post Response"""
+
     text: str
     date: datetime
     user_id: int
@@ -36,6 +37,7 @@ class PostResponse(BaseModel):
 
 class PostRequest(BaseModel):
     """Serializer for Post request payload"""
+
     reply_id: Optional[int]
     text: str
 

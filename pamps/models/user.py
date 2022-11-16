@@ -1,14 +1,15 @@
 """User related data models"""
-from typing import Optional, List
+from typing import List, Optional
 
 from pydantic import BaseModel
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from pamps.security import HashedPassword
 
 
 class User(SQLModel, table=True):
     """Represents the User Model"""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, nullable=False)
     username: str = Field(unique=True, nullable=False)
@@ -22,6 +23,7 @@ class User(SQLModel, table=True):
 
 class UserResponse(BaseModel):
     """Serializer for User Response"""
+
     username: str
     avatar: Optional[str] = None
     bio: Optional[str] = None
@@ -29,6 +31,7 @@ class UserResponse(BaseModel):
 
 class UserRequest(BaseModel):
     """Serializer for User request payload"""
+
     email: str
     username: str
     password: str

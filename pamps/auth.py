@@ -1,6 +1,6 @@
 """Token absed auth"""
 from datetime import datetime, timedelta
-from typing import Optional, Union, Callable
+from typing import Callable, Optional, Union
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
