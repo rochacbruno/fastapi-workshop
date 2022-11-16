@@ -1,0 +1,8 @@
+ipython
+ipdb
+sdb
+pip-tools
+pytest
+black
+flake8
+pylint

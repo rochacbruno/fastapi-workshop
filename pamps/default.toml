@@ -1,0 +1,13 @@
+[default]
+
+[default.db]
+uri = ""
+connect_args = {check_same_thread=false}
+echo = false
+
+[default.security]
+# Set secret key in .secrets.toml
+# SECRET_KEY = ""
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_MINUTES = 600
