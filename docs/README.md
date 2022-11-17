@@ -35,13 +35,15 @@ requirements-dev.txt
 
 
 ```
-ipython   # terminal
-ipdb      # debugger
-sdb       # debugger remoto
-pip-tools # lock de dependencias
-pytest    # execução de testes
-black     # auto formatação
-flake8    # linter
+ipython         # terminal
+ipdb            # debugger
+sdb             # debugger remoto
+pip-tools       # lock de dependencias
+pytest          # execução de testes
+pytest-order    # ordenação de testes
+httpx           # requests async para testes
+black           # auto formatação
+flake8          # linter
 ```
 
 Instalamos as dependencias iniciais.
@@ -101,9 +103,10 @@ mkdir -p pamps/{models,routes}
 touch pamps/default.toml
 touch pamps/{__init__,cli,app,auth,db,security,config}.py
 touch pamps/models/{__init__,post,user}.py
-touch pamps/routes/{__init__,auth,post,user,home}.py
+touch pamps/routes/{__init__,auth,post,user}.py
 
 # Testes
+touch test.sh
 mkdir tests
 touch tests/{__init__,conftest,test_api}.py
 ```
@@ -122,22 +125,21 @@ Esta será a estrutura final (se preferir criar manualmente)
 ├── settings.toml              # Configurações locais
 ├── setup.py                   # Instalação do projeto
 ├── pamps
+│   ├── __init__.py
 │   ├── app.py                 # FastAPI app
-│   ├── auth.py                # Autenticação
+│   ├── auth.py                # Autenticação via token
 │   ├── cli.py                 # Aplicação CLI `$ pamps adduser` etc
 │   ├── config.py              # Inicialização da config
 │   ├── db.py                  # Conexão com o banco de dados
 │   ├── default.toml           # Config default
-│   ├── __init__.py
-│   ├── security.py            # Autenticação
+│   ├── security.py            # Password Validation
 │   ├── models
 │   │   ├── __init__.py
 │   │   ├── post.py            # ORM e Serializers de posts
 │   │   └── user.py            # ORM e Serialziers de users
 │   └── routes
-│       ├── home.py            # Rota principal da timeline
-│       ├── auth.py            # Rotas de autenticação via JWT
 │       ├── __init__.py
+│       ├── auth.py            # Rotas de autenticação via JWT
 │       ├── post.py            # CRUD de posts e likes
 │       └── user.py            # CRUD de user e follows
 ├── postgres
@@ -153,7 +155,7 @@ Esta será a estrutura final (se preferir criar manualmente)
 
 Editaremos o arquivo `requirements.in` e adicionaremos
 
-```
+```plain
 fastapi
 uvicorn
 sqlmodel
@@ -319,7 +321,10 @@ async def index():
 
 Agora acesse novamente http://0.0.0.0:8000/docs
 
-![API](api_first.png)
+![API](api_second.png)
+
+> **NOTA**: pode remover a rota `index()` pois foi apenas para testar, vamos
+> agora adicionar rotas de maneira mais organizada.
 
 
 ## Rodando um banco de dados em container
@@ -390,8 +395,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PAMPS_DB__uri=postgresql://postgres:postgres@db:5432/pamps
-      - PAMPS_DB__connect_args={}
+      PAMPS_DB__uri: "postgresql://postgres:postgres@db:5432/${PAMPS_DB:-pamps}"
+      PAMPS_DB__connect_args: "{}"
     volumes:
       - .:/home/app/api
     depends_on:
@@ -438,6 +443,7 @@ from sqlmodel import Field, SQLModel
 
 class User(SQLModel, table=True):
     """Represents the User Model"""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, nullable=False)
     username: str = Field(unique=True, nullable=False)
@@ -527,10 +533,10 @@ Portanto agora já temos uma tabela mapeada e um conexão com o banco de dados
 precisamos agora garantir que a estrutura da tabela existe dentro do banco
 de dados.
 
-Para isso vamos usar a bilbioteca `alembic` que gerencia migrações, ou seja,
+Para isso vamos usar a biblioteca `alembic` que gerencia migrações, ou seja,
 alterações na estrutura das tabelas.
 
-Começamos indo na raiz do repositório e rodando:
+Começamos na raiz do repositório e rodando:
 
 ```bash
 alembic init migrations
@@ -579,9 +585,10 @@ portando execute
 
 ```console
 $ docker-compose exec api /bin/bash
+app@c5dd026e8f92:~/api$ # este é o shell dentro do container
 ```
 
-> NOTA: todos os comandos serão executados no shell dentro do container!!!
+> IMPORTANTE!!!: todos os comandos serão executados no shell dentro do container!!!
 
 E dentro do prompt do container rode:
 
@@ -607,6 +614,9 @@ INFO  [alembic.runtime.migration] Running upgrade  -> ee59b23815d3, initial
 
 E neste momento a tabela será criada no Postgres, podemos verificar se
 está funcionando ainda dentro do container:
+
+> **DICA** pode usar um client como https://antares-sql.app para se conectar
+> ao banco de dados.
 
 ```console
 $ ipython
@@ -773,8 +783,13 @@ SECRET_KEY = "ONLYFORDEVELOPMENT"
 
 Você pode gerar uma secret key mais segura se quiser usando
 ```console
-$ python -c "print(__import__('secrets').token_hex(16))"
-cc3541946aa624be51ab2f518b47e29c
+$ python -c "print(__import__('secrets').token_hex(32))"
+b9483cc8a0bad1c2fe31e6d9d6a36c4a96ac23859a264b69a0badb4b32c538f8
+
+# OU
+
+$ openssl rand -hex 32
+b9483cc8a0bad1c2fe31e6d9d6a36c4a96ac23859a264b69a0badb4b32c538f8
 ```
 
 Agora vamos editar `pamps/security.py` e adicionar alguns elementos
@@ -829,16 +844,18 @@ class HashedPassword(str):
         # confusion since the value's type won't match the type annotation
         # exactly
         return cls(hashed_password)
+
 ```
 
 E agora editaremos o arquivo `pamps/models/user.py`
 
-No topo
+No topo na linha 7
+
 ```python
 from pamps.security import HashedPassword
 ```
 
-E no model mudamos o campo `password` para
+E no model mudamos o campo `password` na linha 18 para
 
 ```python
 password: HashedPassword
@@ -903,8 +920,8 @@ Agora vamos criar endpoints na API para efetuar as operações que fizemos
 através da CLI, teremos as seguintes rotas:
 
 - `GET /user/` - Lista todos os usuários
-- `GET /user/username/` - Detalhe de um usuário
 - `POST /user/` - Cadastro de novo usuário
+- `GET /user/{username}/` - Detalhe de um usuário
 
 > **TODO:** A exclusão de usuários por enquanto não será permitida
 > mas no futuro você pode implementar um comando no CLI para fazer isso
@@ -919,15 +936,18 @@ banco de dados diretamente na API.
 
 Em `pamps/models/user.py`
 
-No topo
+No topo na linha 4
+
 ```python
 from pydantic import BaseModel
 ```
 
-No final
+No final após a linha 20
+
 ```python
 class UserResponse(BaseModel):
     """Serializer for User Response"""
+
     username: str
     avatar: Optional[str] = None
     bio: Optional[str] = None
@@ -935,6 +955,7 @@ class UserResponse(BaseModel):
 
 class UserRequest(BaseModel):
     """Serializer for User request payload"""
+
     email: str
     username: str
     password: str
@@ -986,20 +1007,20 @@ async def create_user(*, session: Session = ActiveSession, user: UserRequest):
     session.commit()
     session.refresh(db_user)
     return db_user
-
 ```
 
 Agora repare que estamos importando `ActiveSession` mas este objeto não existe
 em `pamps/db.py` então vamos criar
 
 
-No topo de `pamps/db.py`
+No topo de `pamps/db.py` nas linhas 2 e 3
 ```python
 from fastapi import Depends
 from sqlmodel import Session, create_engine
 ```
 
-No final de `pamps/db.py`
+No final de `pamps/db.py` após a linha 13
+
 ```python
 def get_session():
     with Session(engine) as session:
@@ -1009,7 +1030,15 @@ def get_session():
 ActiveSession = Depends(get_session)
 ```
 
-Agora podemos mapear as rotas na aplicação principal primeiro criarmos um
+O objeto que `ActiveSession` é uma dependência para rotas do FastAPI
+quando usarmos este objeto como parâmetro de uma view o FastAPI
+vai executar de forma **lazy** este objeto e passar o retorno da função
+atrelada a ele como argumento da nossa view.
+
+Neste caso teremos sempre uma conexão com o banco de dados dentro de cada
+view que marcarmos com `session: Session = ActiveSession`.
+
+Agora podemos mapear as rotas na aplicação principal primeiro criamos um
 router principal que serve para agregar todas as rotas:
 
 em `pamps/router/__init__.py`
@@ -1026,20 +1055,20 @@ main_router.include_router(user_router, prefix="/user", tags=["user"])
 
 E agora em `pamps/app.py`
 
-NO topo
+NO topo na linha 4
 ```python
 from .routes import main_router
 ```
 
-Logo depois de `app = FastAPI(...`
+Logo depois de `app = FastAPI(...` após a linha 11
 ```python
 app.include_router(main_router)
 ```
 
-E agora sim pode acessar a API e verá as novas rotas prontas para serem usadas.
+E agora sim pode acessar a API e verá as novas rotas prontas para serem usadas,
+http://0.0.0.0:8000/docs/
 
 ![user routes](user_routes1.png)
-
 
 Pode tentar pela web interface ou via curl
 
@@ -1102,22 +1131,247 @@ os usuários pois desta forma podemos começar a criar postagens via API
 
 Esse será arquivo com a maior quantidade de código **boilerplate**.
 
+No arquivo `pamps/auth.py` vamos criar as classes e funções necessárias
+para a implementação de JWT que é a autenticação baseada em token e vamos
+usar o algoritmo selecionado no arquivo de configuração.
+
 `pamps/auth.py`
 ```python
+"""Token absed auth"""
+from datetime import datetime, timedelta
+from typing import Callable, Optional, Union
 
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from pamps.config import settings
+from pamps.db import engine
+from pamps.models.user import User
+from pamps.security import verify_password
+
+SECRET_KEY = settings.security.secret_key
+ALGORITHM = settings.security.algorithm
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+
+
+class RefreshToken(BaseModel):
+    refresh_token: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+
+def create_access_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
+    """Creates a JWT Token from user data"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire, "scope": "access_token"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def create_refresh_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
+    """Refresh an expired token"""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire, "scope": "refresh_token"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def authenticate_user(
+    get_user: Callable, username: str, password: str
+) -> Union[User, bool]:
+    """Authenticate the user"""
+    user = get_user(username)
+    if not user:
+        return False
+    if not verify_password(password, user.password):
+        return False
+    return user
+
+
+def get_user(username) -> Optional[User]:
+    """Get user from database"""
+    query = select(User).where(User.username == username)
+    with Session(engine) as session:
+        return session.exec(query).first()
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme), request: Request = None, fresh=False
+) -> User:
+    """Get current user authenticated"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if request:
+        if authorization := request.headers.get("authorization"):
+            try:
+                token = authorization.split(" ")[1]
+            except IndexError:
+                raise credentials_exception
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user = get_user(username=token_data.username)
+    if user is None:
+        raise credentials_exception
+    if fresh and (not payload["fresh"] and not user.superuser):
+        raise credentials_exception
+
+    return user
+
+
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Wraps the sync get_active_user for sync calls"""
+    return current_user
+
+
+AuthenticatedUser = Depends(get_current_active_user)
+
+
+async def validate_token(token: str = Depends(oauth2_scheme)) -> User:
+    """Validates user token"""
+    user = get_current_user(token=token)
+    return user
 ```
+
+> **NOTA**: O objeto `AuthenticatedUser` é uma dependência do FastAPI e é
+> através dele que iremos garantir que nossas rotas estejas protegidas
+> com token.
+
+A simples presença das urls `/token` e `/refresh_token` fará o FastAPI
+incluir autenticação na API portanto vamos definir essas urls:
 
 `pamps/routes/auth.py`
 ```python
+from datetime import timedelta
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+
+from pamps.auth import (
+    RefreshToken,
+    Token,
+    User,
+    authenticate_user,
+    create_access_token,
+    create_refresh_token,
+    get_user,
+    validate_token,
+)
+from pamps.config import settings
+
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.security.access_token_expire_minutes
+REFRESH_TOKEN_EXPIRE_MINUTES = settings.security.refresh_token_expire_minutes
+
+router = APIRouter()
+
+
+@router.post("/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+):
+    user = authenticate_user(get_user, form_data.username, form_data.password)
+    if not user or not isinstance(user, User):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "fresh": True},
+        expires_delta=access_token_expires,
+    )
+
+    refresh_token_expires = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+    refresh_token = create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post("/refresh_token", response_model=Token)
+async def refresh_token(form_data: RefreshToken):
+    user = await validate_token(token=form_data.refresh_token)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username, "fresh": False},
+        expires_delta=access_token_expires,
+    )
+
+    refresh_token_expires = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+    refresh_token = create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
 ```
 
-`pamps/rotues/__init__.py`
+E agora vamos adicionar essas URLS ao router principal
+
+`pamps/routes/__init__.py`
+
+No topo na linha 3
+
 ```python
-
+from .auth import router as auth_router
 ```
 
-Vamos testar a aquisição de um token
+E depois na linha 9
+
+```python
+main_router.include_router(auth_router, tags=["auth"])
+```
+
+Vamos testar a aquisição de um token via curl ou através da UI.
 
 ```bash
 curl -X 'POST' \
@@ -1136,7 +1390,7 @@ curl -X 'POST' \
 
 ## Adicionando Models de conteúdo
 
-Agora vamos criar as rotas de conteúdo e exigir o token para postar
+Vamos definir a tabela e serializers para posts.
 
 `pamps/models/post.py`
 ```python
@@ -1181,10 +1435,18 @@ class Post(SQLModel, table=True):
 class PostResponse(BaseModel):
     """Serializer for Post Response"""
 
+    id: int
     text: str
     date: datetime
     user_id: int
     parent_id: Optional[int]
+
+
+class PostResponseWithReplies(PostResponse):
+    replies: Optional[list["PostResponse"]] = None
+
+    class Config:
+        orm_mode = True
 
 
 class PostRequest(BaseModel):
@@ -1199,7 +1461,10 @@ class PostRequest(BaseModel):
 
 ```
 
-`pamps/models/user.py`
+Vamos adicionar uma back-reference em `User` para ser mais fácil obter todos
+os seus posts.
+
+`pamps/models/user.py` na linha 21
 ```python
 
 class User...
@@ -1207,6 +1472,8 @@ class User...
     # it populates the .user attribute on the Content Model
     posts: List["Post"] = Relationship(back_populates="user")
 ```
+
+E agora vamos colocar o model Post na raiz do módulo models.
 
 `pamps/models/__init__.py`
 ```python
@@ -1218,7 +1485,8 @@ from .user import User
 __all__ = ["User", "SQLModel", "Post"]
 ```
 
-E para facilitar a vida vamos adicionar também ao `cli.py`
+E para facilitar a vida vamos adicionar também ao `cli.py` dentro do comando
+shell no dict `_vars` adicione o model `Post`.
 
 `pamps/cli.py`
 ```python
@@ -1254,18 +1522,439 @@ INFO  [alembic.runtime.migration] Will assume transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade 4634e842ac70 -> f9b269f8d5f8, post
 ```
 
+## Pode testar no cli dentro do container
+
+```console
+$ pamps shell
+Auto imports: ['settings', 'engine', 'select', 'session', 'User', 'Post']
+
+In [1]: session.exec(select(Post)).all()
+Out[1]: []
+```
+
 ## Adicionando rotas de conteúdo
 
-Agora os endpoints
+Agora os endpoints para listar e adicionar posts
+
+- `GET /post/` lista todos os posts
+- `POST /post/` cria um novo post (exige auth)
+- `GET /post/{id}` pega um post pelo ID com suas respostas
+- `GET /post/user/{username}` Lista posts de um usuário especifico
 
 `pamps/routes/post.py`
-```python
 
+```python
+from typing import List
+
+from fastapi import APIRouter
+from fastapi.exceptions import HTTPException
+from sqlmodel import Session, select
+
+from pamps.auth import AuthenticatedUser
+from pamps.db import ActiveSession
+from pamps.models.post import (
+    Post,
+    PostRequest,
+    PostResponse,
+    PostResponseWithReplies,
+)
+from pamps.models.user import User
+
+router = APIRouter()
+
+
+@router.get("/", response_model=List[PostResponse])
+async def list_posts(*, session: Session = ActiveSession):
+    """List all posts without replies"""
+    query = select(Post).where(Post.parent == None)
+    posts = session.exec(query).all()
+    return posts
+
+
+@router.get("/{post_id}/", response_model=PostResponseWithReplies)
+async def get_post_by_post_id(
+    *,
+    session: Session = ActiveSession,
+    post_id: int,
+):
+    """Get post by post_id"""
+    query = select(Post).where(Post.id == post_id)
+    post = session.exec(query).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
+
+
+@router.get("/user/{username}/", response_model=List[PostResponse])
+async def get_posts_by_username(
+    *,
+    session: Session = ActiveSession,
+    username: str,
+    include_replies: bool = False,
+):
+    """Get posts by username"""
+    filters = [User.username == username]
+    if not include_replies:
+        filters.append(Post.parent == None)
+    query = select(Post).join(User).where(*filters)
+    posts = session.exec(query).all()
+    return posts
+
+
+@router.post("/", response_model=PostResponse, status_code=201)
+async def create_post(
+    *,
+    session: Session = ActiveSession,
+    user: User = AuthenticatedUser,
+    post: PostRequest,
+):
+    """Creates new post"""
+
+    post.user_id = user.id
+
+    db_post = Post.from_orm(post)  # transform PostRequest in Post
+    session.add(db_post)
+    session.commit()
+    session.refresh(db_post)
+    return db_post
 ```
+
+Adicionamos as rotas de `post` em nosso router principal.
 
 `pamps/routes/__init__.py`
+No topo linha 4
 ```python
+from .post import router as post_router
+```
+E no final na linha 11
+```python
+main_router.include_router(post_router, prefix="/post", tags=["post"])
+```
+
+Agora temos uma API quase toda funcional e pode testar clicando
+em `Authorize` usando as senhas criadas pelo CLI ou então crie um novo
+user antes de postar.
+
+![](auth.png)
+
+![](auth2.png)
+
+A API final
+
+![](api_user_post.png)
+
+
+> **NOTA** Ainda está faltando adicionar models e rotas para seguir usuários e
+> para dar like em post.
+
+## Testando
+
+O Pipeline de testes será
+
+0. Garantir que o ambiente está em execução com o docker-compose
+1. Garantir que existe um banco de dados `pamps_test` e que este banco está
+   vazio.
+2. Executar as migrations com alembic e garantir que funcionou
+3. Executar os testes com Pytest
+4. Apagar o banco de dados de testes
+
+Vamos adicionar um comando `reset_db` no cli
+
+> **NOTA** muito cuidado com esse comando!!!
+
+edite `pamps/cli.py` e adicione ao final
+```python
+@main.command()
+def reset_db(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Run with no confirmation"
+    )
+):
+    """Resets the database tables"""
+    force = force or typer.confirm("Are you sure?")
+    if force:
+        SQLModel.metadata.drop_all(engine)
 
 ```
 
-## Testando
+Em um ambiente de CI geralmente usamos `Github Actions` ou `Jenkins` para executar
+esses passos, em nosso caso vamos criar um script em bash para executar essas tarefas.
+
+`test.sh`
+```bash
+#!/usr/bin/bash
+
+# Start environment with docker-compose
+PAMPS_DB=pamps_test docker-compose up -d
+
+# wait 5 seconds
+sleep 5
+
+# Ensure database is clean
+docker-compose exec api pamps reset-db -f
+docker-compose exec api alembic stamp base
+
+# run migrations
+docker-compose exec api alembic upgrade head
+
+# run tests
+docker-compose exec api pytest -v -l --tb=short --maxfail=1 tests/
+
+# Stop environment
+docker-compose down
+```
+
+Para os tests vamos utilizar o Pytest para testar algumas rotas da API,
+com o seguinte fluxo
+
+1. Criar usuário1
+2. Obter um token para o usuário1
+3. Criar um post1 com o usuário1
+4. Criar usuario2
+5. Obter um token para o usuario2
+6. Responder o post1 com o usuario2
+7. Consultar `/post` e garantir que apareçam os posts
+8. COnsultar `/post/id` e garantir que apareça o post com a resposta
+9. Consultar `/post/user/usuario1` e garantir que os posts são listados
+
+
+Começamos configurando o Pytest
+
+`tests/conftest.py`
+```python
+import os
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+
+from pamps.app import app
+from pamps.cli import create_user
+
+os.environ["PAMPS_DB__uri"] = "postgresql://postgres:postgres@db:5432/pamps_test"
+
+
+@pytest.fixture(scope="function")
+def api_client():
+    return TestClient(app)
+
+
+def create_api_client_authenticated(username):
+
+    try:
+        create_user(f"{username}@pamps.com", username, username)
+    except IntegrityError:
+        pass
+
+    client = TestClient(app)
+    token = client.post(
+        "/token",
+        data={"username": username, "password": username},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    ).json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
+
+
+@pytest.fixture(scope="function")
+def api_client_user1():
+    return create_api_client_authenticated("user1")
+
+
+@pytest.fixture(scope="function")
+def api_client_user2():
+    return create_api_client_authenticated("user2")
+```
+
+E agora adicionamos os testes
+
+```python
+import pytest
+
+
+@pytest.mark.order(1)
+def test_post_create_user1(api_client_user1):
+    """Create 2 posts with user 1"""
+    for n in (1, 2):
+        response = api_client_user1.post(
+            "/post/",
+            json={
+                "text": f"hello test {n}",
+            },
+        )
+        assert response.status_code == 201
+        result = response.json()
+        assert result["text"] == f"hello test {n}"
+        assert result["parent_id"] is None
+
+
+@pytest.mark.order(2)
+def test_reply_on_post_1(api_client, api_client_user1, api_client_user2):
+    """each user will add a reply to the first post"""
+    posts = api_client.get("/post/user/user1/").json()
+    first_post = posts[0]
+    for n, client in enumerate((api_client_user1, api_client_user2), 1):
+        response = client.post(
+            "/post/",
+            json={
+                "text": f"reply from user{n}",
+                "parent_id": first_post["id"],
+            },
+        )
+        assert response.status_code == 201
+        result = response.json()
+        assert result["text"] == f"reply from user{n}"
+        assert result["parent_id"] == first_post["id"]
+
+
+@pytest.mark.order(3)
+def test_post_list_without_replies(api_client):
+    response = api_client.get("/post/")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 2
+    for result in results:
+        assert result["parent_id"] is None
+        assert "hello test" in result["text"]
+
+
+@pytest.mark.order(3)
+def test_post1_detail(api_client):
+    posts = api_client.get("/post/user/user1/").json()
+    first_post = posts[0]
+    first_post_id = first_post["id"]
+
+    response = api_client.get(f"/post/{first_post_id}/")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["id"] == first_post_id
+    assert result["user_id"] == first_post["user_id"]
+    assert result["text"] == "hello test 1"
+    assert result["parent_id"] is None
+    replies = result["replies"]
+    assert len(replies) == 2
+    for reply in replies:
+        assert reply["parent_id"] == first_post_id
+        assert "reply from user" in reply["text"]
+
+
+@pytest.mark.order(3)
+def test_all_posts_from_user1(api_client):
+    response = api_client.get("/post/user/user1/")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 2
+    for result in results:
+        assert result["parent_id"] is None
+        assert "hello test" in result["text"]
+
+
+@pytest.mark.order(3)
+def test_all_posts_from_user1_with_replies(api_client):
+    response = api_client.get(
+        "/post/user/user1/", params={"include_replies": True}
+    )
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 3
+```
+
+E para executar os tests podemos ir na raiz do projeto **FORA DO CONTAINER**
+
+```console
+$ ./tests.sh
+[+] Running 3/3
+ ⠿ Network fastapi-workshop_default  Created                      0.0s
+ ⠿ Container fastapi-workshop-db-1   Started                      0.5s
+ ⠿ Container fastapi-workshop-api-1  Started                      1.4s
+
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running stamp_revision f432efb19d1a ->
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> ee59b23815d3, initial
+INFO  [alembic.runtime.migration] Running upgrade 4634e842ac70 -> f9b269f8d5f8, post
+
+========================= test session starts =========================
+platform linux -- Python 3.10.8, pytest-7.2.0, pluggy-1.0.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /home/app/api
+plugins: order-1.0.1, anyio-3.6.2
+collected 6 items
+
+tests/test_api.py::test_post_create_user1 PASSED                [ 16%]
+tests/test_api.py::test_reply_on_post_1 PASSED                  [ 33%]
+tests/test_api.py::test_post_list_without_replies PASSED        [ 50%]
+tests/test_api.py::test_post1_detail PASSED                     [ 66%]
+tests/test_api.py::test_all_posts_from_user1 PASSED             [ 83%]
+tests/test_api.py::test_all_posts_from_user1_with_replies PASSED [100%]
+
+========================== 6 passed in 1.58s ==========================
+
+[+] Running 3/3
+ ⠿ Container fastapi-workshop-api-1  Removed                      0.8s
+ ⠿ Container fastapi-workshop-db-1   Removed                      0.6s
+ ⠿ Network fastapi-workshop_default  Removed                      0.5s
+```
+
+
+## Desafios finais
+
+Lembra-se do nosso database?
+
+![](database.png)
+
+Em nosso projeto está faltando adicionar os models para `Social` e `Like`
+
+### Social
+
+O objetivo é que um usuário possa seguir outro usuário,
+para isso o usuário precisará estar autenticado e fazer um `post` request em
+`POST /user/follow/{id}` e sua tarefa é implementar esse endpoint armazenando
+o resultado na tabela `Social`.
+
+- Passo 1
+  Edite `pamps/models/user.py` e adicione a tabela `Social` com toda a
+  especificação e relacionamentos necessários. (adicione esse model ao `__init__.py`
+- Passo 2
+  Execute dentro do shell do container `alembic revision --autogenerate -m 'social'`
+  para criar a migração
+- Passo 3
+  Aplique as migrations de tabela com `alembic upgrade head`
+- Passo 4
+  Crie o Endpoint em `pamps/routes/user.py` com a lógica necessária e adicione ao
+  router `__init__.py`
+- Passo 5
+  Escreva um teste em `tests_user.py` para testar a funcionalidade de um usuário
+  seguir outro usuário
+- Passo 6
+  Em `pamps/routes/user.py` cria uma rota `/timeline` que ao acessar `/user/timeline`
+  irá listar todos os posts de todos os usuários que o user autenticado segue.
+
+### Like
+
+O objetivo é que um usuário possa enviar um like em um post e para isso
+precisará estar autenticado e fazer um `post` em `/post/{post_id}/like/`
+e a sua tarefa é implementar esse endpoint salvando o resultado na tabela `Like`.
+
+- Passo1
+  Edite `pamps/model/post.py` e adicione a tabela `Like` com toda a especificação
+  necessária com relacionamentos e adicione ao model `__init__.py`
+- Passo 2
+  Execute dentro do shell do container `alembic revision --autogenerate -m 'like'`
+  para criar a migração
+- Passo 3
+  Aplique as migrations de tabela com `alembic upgrade head`
+- Passo 4
+  Crie o endpoint em `pamps/routes/post.py` com a lógica necessária e adicione ao
+  routes `__init__.py`
+- Passo 5
+  Escreva um teste onde um user pode deixar um like em um post
+- Passo 6
+  Em `pamps/routes/post.py` crie uma rota `/likes/{username}/` que retorne
+  todos os posts que um user curtiu.
+
+### Desafio extra opcional
+
+Use React ou VueJS para criar um front-end para esta aplicação :)

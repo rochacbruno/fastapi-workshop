@@ -8,8 +8,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PAMPS_DB__uri=postgresql://postgres:postgres@db:5432/pamps
-      - PAMPS_DB__connect_args={}
+      PAMPS_DB__uri: "postgresql://postgres:postgres@db:5432/${PAMPS_DB:-pamps}"
+      PAMPS_DB__connect_args: "{}"
     volumes:
       - .:/home/app/api
     depends_on:

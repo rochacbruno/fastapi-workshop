@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .db import engine
-from .models import Post, User
+from .models import Post, SQLModel, User
 
 main = typer.Typer(name="Pamps CLI")
 
@@ -60,3 +60,15 @@ def create_user(email: str, username: str, password: str):
         session.refresh(user)
         typer.echo(f"created {username} user")
         return user
+
+
+@main.command()
+def reset_db(
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Run with no confirmation"
+    )
+):
+    """Resets the database tables"""
+    force = force or typer.confirm("Are you sure?")
+    if force:
+        SQLModel.metadata.drop_all(engine)
