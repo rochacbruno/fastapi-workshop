@@ -404,7 +404,7 @@ services:
     volumes:
       - $HOME/.postgres/pamps_db/data/postgresql:/var/lib/postgresql/data
     ports:
-      - "5435:5432"
+      - "5432:5432"
     environment:
       - POSTGRES_DBS=pamps, pamps_test
       - POSTGRES_USER=postgres
@@ -1140,22 +1140,99 @@ Agora vamos criar as rotas de conteúdo e exigir o token para postar
 
 `pamps/models/post.py`
 ```python
+"""Post related data models"""
+
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+
+from pydantic import BaseModel, Extra
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from project_name.security import User
+
+
+class Post(SQLModel, table=True):
+    """Represents the Post Model"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    text: str
+    date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+    user_id: Optional[int] = Field(foreign_key="user.id")
+    parent_id: Optional[int] = Field(foreign_key="post.id")
+
+    # It populates a `.posts` attribute to the `User` model.
+    user: Optional["User"] = Relationship(back_populates="posts")
+
+    # It populates `.replies` on this model
+    parent: Optional["Post"] = Relationship(
+        back_populates="replies",
+        sa_relationship_kwargs=dict(remote_side="Post.id"),
+    )
+    # This lists all children to this post
+    replies: list["Post"] = Relationship(back_populates="parent")
+
+    def __lt__(self, other):
+        """This enables post.replies.sort() to sort by date"""
+        return self.date < other.date
+
+
+class PostResponse(BaseModel):
+    """Serializer for Post Response"""
+
+    text: str
+    date: datetime
+    user_id: int
+    parent_id: Optional[int]
+
+
+class PostRequest(BaseModel):
+    """Serializer for Post request payload"""
+
+    parent_id: Optional[int]
+    text: str
+
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
 
 ```
 
 `pamps/models/user.py`
 ```python
 
+class User...
+    ...
+    # it populates the .user attribute on the Content Model
+    posts: List["Post"] = Relationship(back_populates="user")
 ```
 
 `pamps/models/__init__.py`
 ```python
+from sqlmodel import SQLModel
 
+from .post import Post
+from .user import User
+
+__all__ = ["User", "SQLModel", "Post"]
+```
+
+E para facilitar a vida vamos adicionar também ao `cli.py`
+
+`pamps/cli.py`
+```python
+from .models import Post, User
+...
+_vars = {
+    ...
+    "Post": Post,
+}
 ```
 
 ## Database Migration
 
-Agora precisamos chamar o **alambic** para gerar a database migration relativa
+Agora precisamos chamar o **alembic** para gerar a database migration relativa
 a  nova tabela `post`.
 
 Dentro do container shell

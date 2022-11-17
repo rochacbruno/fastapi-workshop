@@ -120,8 +120,6 @@ async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Wraps the sync get_active_user for sync calls"""
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 

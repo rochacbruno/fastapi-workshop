@@ -22,7 +22,7 @@ services:
     volumes:
       - $HOME/.postgres/pamps_db/data/postgresql:/var/lib/postgresql/data
     ports:
-      - "5435:5432"
+      - "5432:5432"
     environment:
       - POSTGRES_DBS=pamps, pamps_test
       - POSTGRES_USER=postgres

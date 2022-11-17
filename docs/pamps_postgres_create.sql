@@ -29,7 +29,7 @@ CREATE TABLE "public.post" (
 	"user" bigint NOT NULL,
 	"text" varchar(255) NOT NULL,
 	"date" TIMESTAMP NOT NULL,
-	"reply" bigint,
+	"parent" bigint,
 	CONSTRAINT "post_pk" PRIMARY KEY ("id")
 ) WITH (
   OIDS=FALSE
@@ -53,7 +53,7 @@ ALTER TABLE "social" ADD CONSTRAINT "social_fk0" FOREIGN KEY ("from") REFERENCES
 ALTER TABLE "social" ADD CONSTRAINT "social_fk1" FOREIGN KEY ("to") REFERENCES "user"("id");
 
 ALTER TABLE "post" ADD CONSTRAINT "post_fk0" FOREIGN KEY ("user") REFERENCES "user"("id");
-ALTER TABLE "post" ADD CONSTRAINT "post_fk1" FOREIGN KEY ("reply") REFERENCES "post"("id");
+ALTER TABLE "post" ADD CONSTRAINT "post_fk1" FOREIGN KEY ("parent") REFERENCES "post"("id");
 
 ALTER TABLE "like" ADD CONSTRAINT "like_fk0" FOREIGN KEY ("user") REFERENCES "user"("id");
 ALTER TABLE "like" ADD CONSTRAINT "like_fk1" FOREIGN KEY ("post") REFERENCES "post"("id");
