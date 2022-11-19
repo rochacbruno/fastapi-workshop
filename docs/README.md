@@ -6,7 +6,7 @@ Criando uma aplicação web com API usando FastAPI
 
 - Computador com Python 3.10
 - Docker & docker-compose
-- Ou gitpod.io para um ambiente online
+- Ou https://gitpod.io para um ambiente online
 - Um editor de códigos como VSCode, Sublime, Vim, Micro
   (Nota: Eu usarei o Micro-Editor)
 
@@ -17,13 +17,13 @@ Criando uma aplicação web com API usando FastAPI
 Primeiro precisamos de um ambiente virtual para instalar
 as dependencias do projeto.
 
-```
+```console
 python -m venv .venv
 ```
 
 E ativaremos a virtualenv
 
-```
+```console
 # Linux
 source .venv/bin/activate
 # Windows Power Shell
@@ -48,7 +48,7 @@ flake8          # linter
 
 Instalamos as dependencias iniciais.
 
-```
+```console
 pip install --upgrade pip
 pip install -r requirements-dev.txt
 ```
@@ -124,6 +124,7 @@ Esta será a estrutura final (se preferir criar manualmente)
 ├── .secrets.toml              # Senhas locais
 ├── settings.toml              # Configurações locais
 ├── setup.py                   # Instalação do projeto
+├── test.sh                    # Pipeline de CI em ambiente dev
 ├── pamps
 │   ├── __init__.py
 │   ├── app.py                 # FastAPI app
@@ -1403,7 +1404,7 @@ from pydantic import BaseModel, Extra
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from project_name.security import User
+    from pamps.models.user import User
 
 
 class Post(SQLModel, table=True):
@@ -1464,8 +1465,15 @@ class PostRequest(BaseModel):
 Vamos adicionar uma back-reference em `User` para ser mais fácil obter todos
 os seus posts.
 
-`pamps/models/user.py` na linha 21
+`pamps/models/user.py`
 ```python
+
+# No topo do arquivo
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pamps.models.post import Post
+
 
 class User...
     ...
@@ -1862,7 +1870,11 @@ def test_all_posts_from_user1_with_replies(api_client):
 E para executar os tests podemos ir na raiz do projeto **FORA DO CONTAINER**
 
 ```console
-$ ./tests.sh
+$ chmod +x test.sh
+```
+e
+```console
+$ ./test.sh
 [+] Running 3/3
  ⠿ Network fastapi-workshop_default  Created                      0.0s
  ⠿ Container fastapi-workshop-db-1   Started                      0.5s
