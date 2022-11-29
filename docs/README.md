@@ -2,6 +2,29 @@
 
 Criando uma aplicação web com API usando FastAPI
 
+> &nbsp;  
+> Quer ver a API funcionando antes de tentar construir do zero?
+> clica aqui  
+> [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/rochacbruno/fastapi-workshop)   
+> ```console
+> # No terminal do gitpod execute:
+> docker-compose up
+> 
+> # Abre outro terminal clicando no `+` e execute:
+> docker-compose exec api alembic upgrade head
+> ```
+>
+> Pronto a API estará sendo servida na porta 8000 do seu gitpod, exemplo:  
+> https://8000-seuuser-fastapiwork-random.random.gitpod.io/docs 
+>  
+> ```
+> # Experimente também no terminal do gitpod:
+> pip install -e .
+> docker-compose exec api pamps --help
+> ```
+> &nbsp;
+
+
 ## Requisitos
 
 - Computador com Python 3.10
