@@ -8,10 +8,10 @@ Criando uma aplicação web com API usando FastAPI
 > [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/rochacbruno/fastapi-workshop)   
 > ```console
 > # No terminal do gitpod execute:
-> docker-compose up
+> docker compose up
 > 
 > # Abre outro terminal clicando no `+` e execute:
-> docker-compose exec api alembic upgrade head
+> docker compose exec api alembic upgrade head
 > ```
 >
 > Pronto a API estará sendo servida na porta 8000 do seu gitpod, exemplo:  
@@ -20,15 +20,17 @@ Criando uma aplicação web com API usando FastAPI
 > ```
 > # Experimente também no terminal do gitpod:
 > pip install -e .
-> docker-compose exec api pamps --help
+> docker compose exec api pamps --help
 > ```
 > &nbsp;
 
 
+> WARNING!!! Se `docker compose` não funcionar experimente colocar um `-` como em `docker-compose` 
+
 ## Requisitos
 
 - Computador com Python 3.10
-- Docker & docker-compose
+- Docker & docker compose
 - Ou https://gitpod.io para um ambiente online
 - Um editor de códigos como VSCode, Sublime, Vim, Micro
   (Nota: Eu usarei o Micro-Editor)
@@ -397,7 +399,7 @@ COPY create-databases.sh /docker-entrypoint-initdb.d/
 
 Agora para iniciar a nossa API + o Banco de dados vamos precisar de um
 orquestrador de containers, em produção isso será feito com Kubernetes
-mas no ambiente de desenvolvimento podemos usar o docker-compose.
+mas no ambiente de desenvolvimento podemos usar o docker compose.
 
 Edite o arquivo `docker-compose.yaml`
 
@@ -443,7 +445,7 @@ services:
 O próximo passo é executar com
 
 ```bash
-docker-compose up
+docker compose up
 ```
 
 ## Definindo os models com Pydantic
@@ -608,7 +610,7 @@ migrations, precisamos executar este comando dentro do container
 portando execute
 
 ```console
-$ docker-compose exec api /bin/bash
+$ docker compose exec api /bin/bash
 app@c5dd026e8f92:~/api$ # este é o shell dentro do container
 ```
 
@@ -1682,7 +1684,7 @@ A API final
 
 O Pipeline de testes será
 
-0. Garantir que o ambiente está em execução com o docker-compose
+0. Garantir que o ambiente está em execução com o docker compose
 1. Garantir que existe um banco de dados `pamps_test` e que este banco está
    vazio.
 2. Executar as migrations com alembic e garantir que funcionou
@@ -1715,24 +1717,24 @@ esses passos, em nosso caso vamos criar um script em bash para executar essas ta
 ```bash
 #!/usr/bin/bash
 
-# Start environment with docker-compose
-PAMPS_DB=pamps_test docker-compose up -d
+# Start environment with docker compose
+PAMPS_DB=pamps_test docker compose up -d
 
 # wait 5 seconds
 sleep 5
 
 # Ensure database is clean
-docker-compose exec api pamps reset-db -f
-docker-compose exec api alembic stamp base
+docker compose exec api pamps reset-db -f
+docker compose exec api alembic stamp base
 
 # run migrations
-docker-compose exec api alembic upgrade head
+docker compose exec api alembic upgrade head
 
 # run tests
-docker-compose exec api pytest -v -l --tb=short --maxfail=1 tests/
+docker compose exec api pytest -v -l --tb=short --maxfail=1 tests/
 
 # Stop environment
-docker-compose down
+docker compose down
 ```
 
 Para os tests vamos utilizar o Pytest para testar algumas rotas da API,
